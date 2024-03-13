@@ -25,5 +25,19 @@ def generate_delivery_data():
     }
 
 
+def get_location(address):
+    url = 'https://dapi.kakao.com/v2/local/search/address.json?query=' + address
+    headers = {'Authorization': 'KakaoAK <APIKEY>'}
+    location = requests.get(url, headers=headers).json()
+
+    return location
+
+
 if __name__ == '__main__':
     delivery = generate_delivery_data()
+
+    location = get_location(delivery['deliveryDestination'])['documents'][0]
+
+    delivery['lat'] = location['y']
+    delivery['lon'] = location['x']
+    delivery['deliveryCharge'] = round(random.randint(1000, 5000) + (delivery['deliveryDistance'] * 500), -1)
