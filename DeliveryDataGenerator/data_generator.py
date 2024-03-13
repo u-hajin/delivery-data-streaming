@@ -33,11 +33,39 @@ def get_location(address):
     return location
 
 
+def delivery_report(error, msg):
+    if error is not None:
+        print(f'Message delivery failed: {error}')
+    else:
+        print(f'Message delivered to {msg.topic} [{msg.partition}]')
+
+
 if __name__ == '__main__':
-    delivery = generate_delivery_data()
+    topic = 'delivery_information'
+    producer = SerializingProducer({
+        'bootstrap.servers': 'localhost:9092'
+    })
 
-    location = get_location(delivery['deliveryDestination'])['documents'][0]
+    current_time = datetime.now()
 
-    delivery['lat'] = location['y']
-    delivery['lon'] = location['x']
-    delivery['deliveryCharge'] = round(random.randint(1000, 5000) + (delivery['deliveryDistance'] * 500), -1)
+    while (datetime.now() - current_time).seconds < 200:
+        try:
+            delivery = generate_delivery_data()
+            location = get_location(delivery['deliveryDestination'])['documents'][0]
+
+            delivery['lat'] = location['y']
+            delivery['lon'] = location['x']
+            delivery['deliveryCharge'] = round(random.randint(1000, 5000) + (delivery['deliveryDistance'] * 500), -1)
+
+            producer.produce(
+                topic=topic,
+                key=delivery['deliveryId'],
+                value=json.dumps(delivery, ensure_ascii=False),
+                on_delivery=delivery_report
+            )
+
+            producer.poll(0)
+
+            time.sleep(2)
+        except Exception as e:
+            print(e)
