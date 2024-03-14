@@ -53,8 +53,8 @@ if __name__ == '__main__':
             delivery = generate_delivery_data()
             location = get_location(delivery['deliveryDestination'])['documents'][0]
 
-            delivery['lat'] = location['y']
-            delivery['lon'] = location['x']
+            delivery['destinationLat'] = location['y']
+            delivery['destinationLon'] = location['x']
             delivery['deliveryCharge'] = round(random.randint(1000, 5000) + (delivery['deliveryDistance'] * 500), -1)
 
             producer.produce(

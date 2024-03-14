@@ -8,7 +8,7 @@ import java.sql.Timestamp;
 public class Delivery {
     private String deliveryId;
     private Timestamp deliveryDate;
-    private String customerId;
+    private String userId;
     private String foodCategory;
     private double foodPrice;
     private String paymentMethod;
