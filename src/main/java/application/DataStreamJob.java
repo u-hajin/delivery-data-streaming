@@ -16,8 +16,14 @@
  * limitations under the License.
  */
 
-package org.example;
+package application;
 
+import deserialization.JsonValueDeserializationSchema;
+import dto.Delivery;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.connector.kafka.source.KafkaSource;
+import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
+import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 public class DataStreamJob {
@@ -25,7 +31,21 @@ public class DataStreamJob {
     public static void main(String[] args) throws Exception {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
+        String topic = "delivery_information";
+
+        KafkaSource<Delivery> source = KafkaSource
+                .<Delivery>builder()
+                .setBootstrapServers("localhost:9092")
+                .setTopics(topic)
+                .setGroupId("flink-group")
+                .setStartingOffsets(OffsetsInitializer.earliest())
+                .setValueOnlyDeserializer(new JsonValueDeserializationSchema())
+                .build();
+
+        DataStream<Delivery> deliveryStream = env.fromSource(source, WatermarkStrategy.noWatermarks(), "Kafka source");
+        deliveryStream.print();
+
         // Execute program, beginning computation.
-        env.execute("Flink Java API Skeleton");
+        env.execute("Delivery Realtime Data Streaming");
     }
 }
