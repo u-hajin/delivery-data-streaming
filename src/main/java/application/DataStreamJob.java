@@ -20,6 +20,7 @@ package application;
 
 import deserialization.JsonValueDeserializationSchema;
 import dto.Delivery;
+import dto.PayPerDestination;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.connector.jdbc.JdbcConnectionOptions;
 import org.apache.flink.connector.jdbc.JdbcExecutionOptions;
@@ -30,10 +31,13 @@ import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsIni
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
+import java.math.BigDecimal;
+import java.util.StringTokenizer;
+
 public class DataStreamJob {
-    private static final String jdbcUrl = "jdbc:postgresql://localhost:5432/postgres";
-    private static final String userName = "postgres";
-    private static final String password = "postgres";
+    private static final String JDBC_URL = "jdbc:postgresql://localhost:5432/postgres";
+    private static final String USER_NAME = "postgres";
+    private static final String PASSWORD = "postgres";
 
 
     public static void main(String[] args) throws Exception {
@@ -51,7 +55,7 @@ public class DataStreamJob {
                 .build();
 
         DataStream<Delivery> deliveryStream = env.fromSource(source, WatermarkStrategy.noWatermarks(), "Kafka source");
-//        deliveryStream.print();
+        deliveryStream.print();
 
         JdbcExecutionOptions executionOptions = new JdbcExecutionOptions.Builder()
                 .withBatchSize(1000)
@@ -60,15 +64,13 @@ public class DataStreamJob {
                 .build();
 
         JdbcConnectionOptions connectionOptions = new JdbcConnectionOptions.JdbcConnectionOptionsBuilder()
-                .withUrl(jdbcUrl)
+                .withUrl(JDBC_URL)
                 .withDriverName("org.postgresql.Driver")
-                .withUsername(userName)
-                .withPassword(password)
+                .withUsername(USER_NAME)
+                .withPassword(PASSWORD)
                 .build();
 
-
-        // create delivery_information table
-        deliveryStream.addSink(JdbcSink.sink(
+        String[] createTableStatements = {
                 "CREATE TABLE IF NOT EXISTS delivery_information(" +
                         "delivery_id VARCHAR(255) PRIMARY KEY, " +
                         "delivery_date TIMESTAMP, " +
@@ -82,12 +84,28 @@ public class DataStreamJob {
                         "destination_lon DECIMAL(17, 14), " +
                         "delivery_charge INT " +
                         ")",
-                (JdbcStatementBuilder<Delivery>) (preparedStatement, delivery) -> {
+                "CREATE TABLE IF NOT EXISTS pay_per_destination(" +
+                        "delivery_destination VARCHAR(255) PRIMARY KEY, " +
+                        "total_food_price DECIMAL , " +
+                        "total_delivery_charge DECIMAL " +
+                        ")",
+        };
 
-                },
-                executionOptions,
-                connectionOptions
-        )).name("Create delivery_information table");
+        String[] sinkName = {
+                "Create delivery_information table",
+                "Create pay_per_destination table",
+        };
+
+        for (int i = 0; i < createTableStatements.length; i++) {
+            deliveryStream.addSink(JdbcSink.sink(
+                    createTableStatements[i],
+                    (JdbcStatementBuilder<Delivery>) (preparedStatement, delivery) -> {
+                    },
+                    executionOptions,
+                    connectionOptions
+            )).name(sinkName[i]);
+        }
+
 
         // insert into delivery_information table
         deliveryStream.addSink(JdbcSink.sink(
@@ -123,6 +141,38 @@ public class DataStreamJob {
                 connectionOptions
         )).name("Insert into delivery_information table");
 
+        // insert into pay_per_destination table
+        deliveryStream.map(
+                        delivery -> {
+                            StringTokenizer tokens = new StringTokenizer(delivery.getDeliveryDestination(), " ");
+                            String deliveryDestination = tokens.nextToken() + " " + tokens.nextToken();
+                            BigDecimal foodPrice = BigDecimal.valueOf(delivery.getFoodPrice());
+                            BigDecimal deliveryCharge = BigDecimal.valueOf(delivery.getDeliveryCharge());
+
+                            return new PayPerDestination(deliveryDestination, foodPrice, deliveryCharge);
+                        }
+                ).keyBy(PayPerDestination::getDeliveryDestination)
+                .reduce((payPerDestination, t1) -> {
+                    payPerDestination.setTotalFoodPrice(payPerDestination.getTotalFoodPrice().add(t1.getTotalFoodPrice()));
+                    payPerDestination.setTotalDeliveryCharge(payPerDestination.getTotalDeliveryCharge().add(t1.getTotalDeliveryCharge()));
+
+                    return payPerDestination;
+                }).addSink(JdbcSink.sink(
+                        "INSERT INTO pay_per_destination(delivery_destination, total_food_price, total_delivery_charge) " +
+                                "VALUES(?, ?, ?) " +
+                                "ON CONFLICT (delivery_destination) DO UPDATE SET " +
+                                "delivery_destination = EXCLUDED.delivery_destination, " +
+                                "total_food_price = EXCLUDED.total_food_price, " +
+                                "total_delivery_charge = EXCLUDED.total_delivery_charge " +
+                                "WHERE pay_per_destination.delivery_destination = EXCLUDED.delivery_destination",
+                        (JdbcStatementBuilder<PayPerDestination>) (preparedStatement, payPerDestination) -> {
+                            preparedStatement.setString(1, payPerDestination.getDeliveryDestination());
+                            preparedStatement.setBigDecimal(2, payPerDestination.getTotalFoodPrice());
+                            preparedStatement.setBigDecimal(3, payPerDestination.getTotalDeliveryCharge());
+                        },
+                        executionOptions,
+                        connectionOptions
+                )).name("Insert into pay_per_destination table");
 
         // Execute program, beginning computation.
         env.execute("Delivery Realtime Data Streaming");
