@@ -19,6 +19,7 @@
 package application;
 
 import deserialization.JsonValueDeserializationSchema;
+import dto.ChargePerDay;
 import dto.Delivery;
 import dto.PayPerDestination;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
@@ -32,6 +33,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.StringTokenizer;
 
 public class DataStreamJob {
@@ -89,11 +91,16 @@ public class DataStreamJob {
                         "total_food_price DECIMAL , " +
                         "total_delivery_charge DECIMAL " +
                         ")",
+                "CREATE TABLE IF NOT EXISTS charge_per_day(" +
+                        "day VARCHAR(10) PRIMARY KEY, " +
+                        "total_delivery_charge DECIMAL " +
+                        ")",
         };
 
         String[] sinkName = {
                 "Create delivery_information table",
                 "Create pay_per_destination table",
+                "Create charge_per_day table"
         };
 
         for (int i = 0; i < createTableStatements.length; i++) {
@@ -109,9 +116,9 @@ public class DataStreamJob {
 
         // insert into delivery_information table
         deliveryStream.addSink(JdbcSink.sink(
-                "INSERT INTO delivery_information(delivery_id, delivery_date, user_id, food_category, food_price, " +
+                "INSERT INTO delivery_information (delivery_id, delivery_date, user_id, food_category, food_price, " +
                         "payment_method, delivery_distance, delivery_destination, destination_lat, destination_lon, delivery_charge) " +
-                        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
                         "ON CONFLICT (delivery_id) DO UPDATE SET " +
                         "delivery_date = EXCLUDED.delivery_date, " +
                         "user_id = EXCLUDED.user_id, " +
@@ -158,8 +165,8 @@ public class DataStreamJob {
 
                     return payPerDestination;
                 }).addSink(JdbcSink.sink(
-                        "INSERT INTO pay_per_destination(delivery_destination, total_food_price, total_delivery_charge) " +
-                                "VALUES(?, ?, ?) " +
+                        "INSERT INTO pay_per_destination (delivery_destination, total_food_price, total_delivery_charge) " +
+                                "VALUES (?, ?, ?) " +
                                 "ON CONFLICT (delivery_destination) DO UPDATE SET " +
                                 "delivery_destination = EXCLUDED.delivery_destination, " +
                                 "total_food_price = EXCLUDED.total_food_price, " +
@@ -173,6 +180,36 @@ public class DataStreamJob {
                         executionOptions,
                         connectionOptions
                 )).name("Insert into pay_per_destination table");
+
+        // insert into charge_per_day table
+        deliveryStream.map(
+                        delivery -> {
+                            LocalDate date = delivery.getDeliveryDate().toLocalDateTime().toLocalDate();
+                            String day = date.getDayOfWeek().toString().toLowerCase();
+                            BigDecimal totalDeliveryCharge = BigDecimal.valueOf(delivery.getDeliveryCharge());
+
+                            return new ChargePerDay(day, totalDeliveryCharge);
+                        }
+                ).keyBy(ChargePerDay::getDay)
+                .reduce((chargePerDay, t1) -> {
+                    chargePerDay.setTotalDeliveryCharge(chargePerDay.getTotalDeliveryCharge().add(t1.getTotalDeliveryCharge()));
+
+                    return chargePerDay;
+                }).addSink(JdbcSink.sink(
+                        "INSERT INTO charge_per_day (day, total_delivery_charge) " +
+                                "VALUES (?, ?) " +
+                                "ON CONFLICT (day) DO UPDATE SET " +
+                                "day = EXCLUDED.day, " +
+                                "total_delivery_charge = EXCLUDED.total_delivery_charge " +
+                                "WHERE charge_per_day.day = EXCLUDED.day",
+                        (JdbcStatementBuilder<ChargePerDay>) (preparedStatement, chargePerDay) -> {
+                            preparedStatement.setString(1, chargePerDay.getDay());
+                            preparedStatement.setBigDecimal(2, chargePerDay.getTotalDeliveryCharge());
+                        },
+                        executionOptions,
+                        connectionOptions
+                )).name("Insert into charge_per_day table");
+
 
         // Execute program, beginning computation.
         env.execute("Delivery Realtime Data Streaming");
