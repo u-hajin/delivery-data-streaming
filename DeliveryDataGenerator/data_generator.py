@@ -5,17 +5,18 @@ import time
 import requests
 
 from confluent_kafka import SerializingProducer
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from faker import Faker
 from address import seoul_addresses
 
 faker = Faker()
+KST = timezone(timedelta(hours=9))
 
 
 def generate_delivery_data():
     return {
         'deliveryId': faker.uuid4(),
-        'deliveryDate': datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f%z'),
+        'deliveryDate': datetime.now(KST).strftime('%Y-%m-%dT%H:%M:%S.%f%z'),
         'userId': faker.simple_profile()['username'],
         'foodCategory': random.choice(['한식', '중식', '양식', '일식', '아시안', '치킨', '버거', '분식']),
         'foodPrice': round(random.randint(5000, 12000) * random.randint(1, 4), -1),
