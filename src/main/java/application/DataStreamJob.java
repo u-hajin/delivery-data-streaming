@@ -93,9 +93,11 @@ public class DataStreamJob {
                         "delivery_charge INTEGER " +
                         ")",
                 "CREATE TABLE IF NOT EXISTS pay_per_destination(" +
-                        "delivery_destination VARCHAR(255) PRIMARY KEY, " +
-                        "total_food_price DECIMAL , " +
-                        "total_delivery_charge DECIMAL " +
+                        "delivery_date DATE, " +
+                        "delivery_destination VARCHAR(255), " +
+                        "total_food_price DECIMAL, " +
+                        "total_delivery_charge DECIMAL, " +
+                        "PRIMARY KEY (delivery_date, delivery_destination)" +
                         ")",
                 "CREATE TABLE IF NOT EXISTS charge_per_day(" +
                         "day VARCHAR(10) PRIMARY KEY, " +
@@ -164,30 +166,38 @@ public class DataStreamJob {
         // insert into pay_per_destination table
         deliveryStream.map(
                         delivery -> {
+                            Date deliveryDate = Date.valueOf(delivery.getDeliveryDate().toLocalDateTime().toLocalDate());
                             StringTokenizer tokens = new StringTokenizer(delivery.getDeliveryDestination(), " ");
                             String deliveryDestination = tokens.nextToken() + " " + tokens.nextToken();
                             BigDecimal foodPrice = BigDecimal.valueOf(delivery.getFoodPrice());
                             BigDecimal deliveryCharge = BigDecimal.valueOf(delivery.getDeliveryCharge());
 
-                            return new PayPerDestination(deliveryDestination, foodPrice, deliveryCharge);
+                            return new PayPerDestination(deliveryDate, deliveryDestination, foodPrice, deliveryCharge);
                         }
-                ).keyBy(PayPerDestination::getDeliveryDestination)
+                ).keyBy(new KeySelector<PayPerDestination, Tuple2<Date, String>>() {
+                    @Override
+                    public Tuple2<Date, String> getKey(PayPerDestination payPerDestination) throws Exception {
+                        return Tuple2.of(payPerDestination.getDeliveryDate(), payPerDestination.getDeliveryDestination());
+                    }
+                })
                 .reduce((payPerDestination, t1) -> {
                     payPerDestination.setTotalFoodPrice(payPerDestination.getTotalFoodPrice().add(t1.getTotalFoodPrice()));
                     payPerDestination.setTotalDeliveryCharge(payPerDestination.getTotalDeliveryCharge().add(t1.getTotalDeliveryCharge()));
 
                     return payPerDestination;
                 }).addSink(JdbcSink.sink(
-                        "INSERT INTO pay_per_destination (delivery_destination, total_food_price, total_delivery_charge) " +
-                                "VALUES (?, ?, ?) " +
-                                "ON CONFLICT (delivery_destination) DO UPDATE SET " +
+                        "INSERT INTO pay_per_destination (delivery_date, delivery_destination, total_food_price, total_delivery_charge) " +
+                                "VALUES (?, ?, ?, ?) " +
+                                "ON CONFLICT (delivery_date, delivery_destination) DO UPDATE SET " +
                                 "total_food_price = EXCLUDED.total_food_price, " +
                                 "total_delivery_charge = EXCLUDED.total_delivery_charge " +
-                                "WHERE pay_per_destination.delivery_destination = EXCLUDED.delivery_destination",
+                                "WHERE pay_per_destination.delivery_date = EXCLUDED.delivery_date " +
+                                "AND pay_per_destination.delivery_destination = EXCLUDED.delivery_destination",
                         (JdbcStatementBuilder<PayPerDestination>) (preparedStatement, payPerDestination) -> {
-                            preparedStatement.setString(1, payPerDestination.getDeliveryDestination());
-                            preparedStatement.setBigDecimal(2, payPerDestination.getTotalFoodPrice());
-                            preparedStatement.setBigDecimal(3, payPerDestination.getTotalDeliveryCharge());
+                            preparedStatement.setDate(1, payPerDestination.getDeliveryDate());
+                            preparedStatement.setString(2, payPerDestination.getDeliveryDestination());
+                            preparedStatement.setBigDecimal(3, payPerDestination.getTotalFoodPrice());
+                            preparedStatement.setBigDecimal(4, payPerDestination.getTotalDeliveryCharge());
                         },
                         executionOptions,
                         connectionOptions
