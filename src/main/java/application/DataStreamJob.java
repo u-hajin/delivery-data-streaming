@@ -21,8 +21,13 @@ package application;
 import deserialization.JsonValueDeserializationSchema;
 import dto.ChargePerDay;
 import dto.Delivery;
+import dto.PayPerCategory;
 import dto.PayPerDestination;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.common.typeinfo.TypeHint;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.functions.KeySelector;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.connector.jdbc.JdbcConnectionOptions;
 import org.apache.flink.connector.jdbc.JdbcExecutionOptions;
 import org.apache.flink.connector.jdbc.JdbcSink;
@@ -33,6 +38,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 import java.math.BigDecimal;
+import java.sql.Date;
 import java.time.LocalDate;
 import java.util.StringTokenizer;
 
@@ -84,7 +90,7 @@ public class DataStreamJob {
                         "delivery_destination VARCHAR(255), " +
                         "destination_lat DECIMAL(17, 14), " +
                         "destination_lon DECIMAL(17, 14), " +
-                        "delivery_charge INT " +
+                        "delivery_charge INTEGER " +
                         ")",
                 "CREATE TABLE IF NOT EXISTS pay_per_destination(" +
                         "delivery_destination VARCHAR(255) PRIMARY KEY, " +
@@ -95,12 +101,19 @@ public class DataStreamJob {
                         "day VARCHAR(10) PRIMARY KEY, " +
                         "total_delivery_charge DECIMAL " +
                         ")",
+                "CREATE TABLE IF NOT EXISTS pay_per_category(" +
+                        "delivery_date DATE, " +
+                        "food_category VARCHAR(100), " +
+                        "total_food_price DECIMAL, " +
+                        "PRIMARY KEY (delivery_date, food_category)" +
+                        ")"
         };
 
         String[] sinkName = {
                 "Create delivery_information table",
                 "Create pay_per_destination table",
-                "Create charge_per_day table"
+                "Create charge_per_day table",
+                "Create pay_per_category table"
         };
 
         for (int i = 0; i < createTableStatements.length; i++) {
@@ -168,7 +181,6 @@ public class DataStreamJob {
                         "INSERT INTO pay_per_destination (delivery_destination, total_food_price, total_delivery_charge) " +
                                 "VALUES (?, ?, ?) " +
                                 "ON CONFLICT (delivery_destination) DO UPDATE SET " +
-                                "delivery_destination = EXCLUDED.delivery_destination, " +
                                 "total_food_price = EXCLUDED.total_food_price, " +
                                 "total_delivery_charge = EXCLUDED.total_delivery_charge " +
                                 "WHERE pay_per_destination.delivery_destination = EXCLUDED.delivery_destination",
@@ -199,7 +211,6 @@ public class DataStreamJob {
                         "INSERT INTO charge_per_day (day, total_delivery_charge) " +
                                 "VALUES (?, ?) " +
                                 "ON CONFLICT (day) DO UPDATE SET " +
-                                "day = EXCLUDED.day, " +
                                 "total_delivery_charge = EXCLUDED.total_delivery_charge " +
                                 "WHERE charge_per_day.day = EXCLUDED.day",
                         (JdbcStatementBuilder<ChargePerDay>) (preparedStatement, chargePerDay) -> {
@@ -209,6 +220,41 @@ public class DataStreamJob {
                         executionOptions,
                         connectionOptions
                 )).name("Insert into charge_per_day table");
+
+        // insert into pay_per_category
+        deliveryStream
+                .map(delivery -> {
+                            Date deliveryDate = Date.valueOf(delivery.getDeliveryDate().toLocalDateTime().toLocalDate());
+                            String foodCategory = delivery.getFoodCategory();
+                            BigDecimal totalFoodPrice = BigDecimal.valueOf(delivery.getFoodPrice());
+
+                            return new PayPerCategory(deliveryDate, foodCategory, totalFoodPrice);
+                        }
+                ).keyBy(new KeySelector<PayPerCategory, Tuple2<Date, String>>() {
+                    @Override
+                    public Tuple2<Date, String> getKey(PayPerCategory payPerCategory) throws Exception {
+                        return Tuple2.of(payPerCategory.getDeliveryDate(), payPerCategory.getFoodCategory());
+                    }
+                })
+                .reduce((payPerCategory, t1) -> {
+                    payPerCategory.setTotalFoodPrice(payPerCategory.getTotalFoodPrice().add(t1.getTotalFoodPrice()));
+
+                    return payPerCategory;
+                }).addSink(JdbcSink.sink(
+                        "INSERT INTO pay_per_category (delivery_date, food_category, total_food_price) " +
+                                "VALUES(?, ?, ?) " +
+                                "ON CONFLICT (delivery_date, food_category) DO UPDATE SET " +
+                                "total_food_price = EXCLUDED.total_food_price " +
+                                "WHERE pay_per_category.delivery_date = EXCLUDED.delivery_date " +
+                                "AND pay_per_category.food_category = EXCLUDED.food_category",
+                        (JdbcStatementBuilder<PayPerCategory>) (preparedStatement, payPerCategory) -> {
+                            preparedStatement.setDate(1, payPerCategory.getDeliveryDate());
+                            preparedStatement.setString(2, payPerCategory.getFoodCategory());
+                            preparedStatement.setBigDecimal(3, payPerCategory.getTotalFoodPrice());
+                        },
+                        executionOptions,
+                        connectionOptions
+                )).name("Insert into pay_per_category");
 
 
         // Execute program, beginning computation.
