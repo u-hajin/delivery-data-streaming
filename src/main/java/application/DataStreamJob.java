@@ -24,16 +24,19 @@ import dto.Delivery;
 import dto.PayPerCategory;
 import dto.PayPerDestination;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.common.typeinfo.TypeHint;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.connector.elasticsearch.sink.Elasticsearch7SinkBuilder;
 import org.apache.flink.connector.jdbc.JdbcConnectionOptions;
 import org.apache.flink.connector.jdbc.JdbcExecutionOptions;
 import org.apache.flink.connector.jdbc.JdbcSink;
 import org.apache.flink.connector.jdbc.JdbcStatementBuilder;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
+import org.apache.flink.elasticsearch7.shaded.org.apache.http.HttpHost;
+import org.apache.flink.elasticsearch7.shaded.org.elasticsearch.action.index.IndexRequest;
+import org.apache.flink.elasticsearch7.shaded.org.elasticsearch.client.Requests;
+import org.apache.flink.elasticsearch7.shaded.org.elasticsearch.common.xcontent.XContentType;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
@@ -41,6 +44,8 @@ import java.math.BigDecimal;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.util.StringTokenizer;
+
+import static utils.JsonUtil.convertDeliveryDataToJson;
 
 public class DataStreamJob {
     private static final String JDBC_URL = "jdbc:postgresql://localhost:5432/postgres";
@@ -50,6 +55,7 @@ public class DataStreamJob {
 
     public static void main(String[] args) throws Exception {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.enableCheckpointing(30000);
 
         String topic = "delivery_information";
 
@@ -266,6 +272,20 @@ public class DataStreamJob {
                         connectionOptions
                 )).name("Insert into pay_per_category");
 
+        // create elasticsearch sink
+        deliveryStream.sinkTo(
+                new Elasticsearch7SinkBuilder<Delivery>()
+                        .setHosts(new HttpHost("localhost", 9200, "http"))
+                        .setEmitter((delivery, context, indexer) -> {
+                            String json = convertDeliveryDataToJson(delivery);
+
+                            IndexRequest indexRequest = Requests.indexRequest()
+                                    .index("delivery")
+                                    .id(delivery.getDeliveryId())
+                                    .source(json, XContentType.JSON);
+                            indexer.add(indexRequest);
+                        }).build()
+        ).name("Elasticsearch sink");
 
         // Execute program, beginning computation.
         env.execute("Delivery Realtime Data Streaming");
