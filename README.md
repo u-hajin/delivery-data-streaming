@@ -55,6 +55,13 @@ Kafka, flink를 사용해 실시간으로 발생하는 배달 주문 데이터�
 - Flink: localhost:8081
 - Kibana: localhost:5601
 
+## 구현 상세 설명
+
+아래 블로그에서 확인할 수 있습니다.
+
+[실시간 배달 주문 데이터 처리 프로젝트](https://select-dev.tistory.com/category/Data/Project)
+
+
 ## 실행 화면
 
 <img width="800" height="auto" src="https://github.com/u-hajin/u-hajin/assets/68963707/b56d04c7-1939-4ada-82e3-19bc61c5dba5">
