@@ -1,10 +1,10 @@
 package dto;
 
-import lombok.Data;
+import lombok.Getter;
 
 import java.sql.Timestamp;
 
-@Data
+@Getter
 public class Delivery {
     private String deliveryId;
     private Timestamp deliveryDate;
