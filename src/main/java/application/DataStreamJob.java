@@ -150,8 +150,7 @@ public class DataStreamJob {
                         "delivery_destination = EXCLUDED.delivery_destination, " +
                         "destination_lat = EXCLUDED.destination_lat, " +
                         "destination_lon = EXCLUDED.destination_lon, " +
-                        "delivery_charge = EXCLUDED.delivery_charge " +
-                        "WHERE delivery_information.delivery_id = EXCLUDED.delivery_id",
+                        "delivery_charge = EXCLUDED.delivery_charge ",
                 (JdbcStatementBuilder<Delivery>) (preparedStatement, delivery) -> {
                     preparedStatement.setString(1, delivery.getDeliveryId());
                     preparedStatement.setTimestamp(2, delivery.getDeliveryDate());
@@ -196,9 +195,7 @@ public class DataStreamJob {
                                 "VALUES (?, ?, ?, ?) " +
                                 "ON CONFLICT (delivery_date, delivery_destination) DO UPDATE SET " +
                                 "total_food_price = EXCLUDED.total_food_price, " +
-                                "total_delivery_charge = EXCLUDED.total_delivery_charge " +
-                                "WHERE pay_per_destination.delivery_date = EXCLUDED.delivery_date " +
-                                "AND pay_per_destination.delivery_destination = EXCLUDED.delivery_destination",
+                                "total_delivery_charge = EXCLUDED.total_delivery_charge",
                         (JdbcStatementBuilder<PayPerDestination>) (preparedStatement, payPerDestination) -> {
                             preparedStatement.setDate(1, payPerDestination.getDeliveryDate());
                             preparedStatement.setString(2, payPerDestination.getDeliveryDestination());
@@ -227,8 +224,7 @@ public class DataStreamJob {
                         "INSERT INTO charge_per_day (day, total_delivery_charge) " +
                                 "VALUES (?, ?) " +
                                 "ON CONFLICT (day) DO UPDATE SET " +
-                                "total_delivery_charge = EXCLUDED.total_delivery_charge " +
-                                "WHERE charge_per_day.day = EXCLUDED.day",
+                                "total_delivery_charge = EXCLUDED.total_delivery_charge",
                         (JdbcStatementBuilder<ChargePerDay>) (preparedStatement, chargePerDay) -> {
                             preparedStatement.setString(1, chargePerDay.getDay());
                             preparedStatement.setBigDecimal(2, chargePerDay.getTotalDeliveryCharge());
@@ -260,9 +256,7 @@ public class DataStreamJob {
                         "INSERT INTO pay_per_category (delivery_date, food_category, total_food_price) " +
                                 "VALUES(?, ?, ?) " +
                                 "ON CONFLICT (delivery_date, food_category) DO UPDATE SET " +
-                                "total_food_price = EXCLUDED.total_food_price " +
-                                "WHERE pay_per_category.delivery_date = EXCLUDED.delivery_date " +
-                                "AND pay_per_category.food_category = EXCLUDED.food_category",
+                                "total_food_price = EXCLUDED.total_food_price",
                         (JdbcStatementBuilder<PayPerCategory>) (preparedStatement, payPerCategory) -> {
                             preparedStatement.setDate(1, payPerCategory.getDeliveryDate());
                             preparedStatement.setString(2, payPerCategory.getFoodCategory());
