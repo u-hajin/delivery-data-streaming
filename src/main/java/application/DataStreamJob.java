@@ -185,11 +185,11 @@ public class DataStreamJob {
                         return Tuple2.of(payPerDestination.getDeliveryDate(), payPerDestination.getDeliveryDestination());
                     }
                 })
-                .reduce((payPerDestination, t1) -> {
-                    payPerDestination.setTotalFoodPrice(payPerDestination.getTotalFoodPrice().add(t1.getTotalFoodPrice()));
-                    payPerDestination.setTotalDeliveryCharge(payPerDestination.getTotalDeliveryCharge().add(t1.getTotalDeliveryCharge()));
+                .reduce((t1, payPerDestination) -> {
+                    t1.setTotalFoodPrice(payPerDestination.getTotalFoodPrice().add(t1.getTotalFoodPrice()));
+                    t1.setTotalDeliveryCharge(payPerDestination.getTotalDeliveryCharge().add(t1.getTotalDeliveryCharge()));
 
-                    return payPerDestination;
+                    return t1;
                 }).addSink(JdbcSink.sink(
                         "INSERT INTO pay_per_destination (delivery_date, delivery_destination, total_food_price, total_delivery_charge) " +
                                 "VALUES (?, ?, ?, ?) " +
@@ -216,10 +216,10 @@ public class DataStreamJob {
                             return new ChargePerDay(day, totalDeliveryCharge);
                         }
                 ).keyBy(ChargePerDay::getDay)
-                .reduce((chargePerDay, t1) -> {
-                    chargePerDay.setTotalDeliveryCharge(chargePerDay.getTotalDeliveryCharge().add(t1.getTotalDeliveryCharge()));
+                .reduce((t1, chargePerDay) -> {
+                    t1.setTotalDeliveryCharge(chargePerDay.getTotalDeliveryCharge().add(t1.getTotalDeliveryCharge()));
 
-                    return chargePerDay;
+                    return t1;
                 }).addSink(JdbcSink.sink(
                         "INSERT INTO charge_per_day (day, total_delivery_charge) " +
                                 "VALUES (?, ?) " +
@@ -248,10 +248,10 @@ public class DataStreamJob {
                         return Tuple2.of(payPerCategory.getDeliveryDate(), payPerCategory.getFoodCategory());
                     }
                 })
-                .reduce((payPerCategory, t1) -> {
-                    payPerCategory.setTotalFoodPrice(payPerCategory.getTotalFoodPrice().add(t1.getTotalFoodPrice()));
+                .reduce((t1, payPerCategory) -> {
+                    t1.setTotalFoodPrice(payPerCategory.getTotalFoodPrice().add(t1.getTotalFoodPrice()));
 
-                    return payPerCategory;
+                    return t1;
                 }).addSink(JdbcSink.sink(
                         "INSERT INTO pay_per_category (delivery_date, food_category, total_food_price) " +
                                 "VALUES(?, ?, ?) " +
