@@ -13,5 +13,4 @@ public class PayPerDestination {
     private String deliveryDestination;
     private BigDecimal totalFoodPrice;
     private BigDecimal totalDeliveryCharge;
-
 }
