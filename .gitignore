@@ -174,3 +174,5 @@ target/
 *.iws
 *.iml
 *.ipr
+
+pg_data
