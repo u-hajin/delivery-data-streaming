@@ -91,6 +91,8 @@ services:
       - discovery.type=single-node
     ports:
       - "9200:9200"
+    volumes:
+      - ./elasticsearch/data:/usr/share/elasticsearch/data
 
   kibana:
     container_name: kb-container
