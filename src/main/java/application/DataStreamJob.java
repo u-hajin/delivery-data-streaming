@@ -106,8 +106,10 @@ public class DataStreamJob {
                         "PRIMARY KEY (delivery_date, delivery_destination)" +
                         ")",
                 "CREATE TABLE IF NOT EXISTS charge_per_day(" +
-                        "day VARCHAR(10) PRIMARY KEY, " +
-                        "total_delivery_charge DECIMAL " +
+                        "month INTEGER, " +
+                        "day VARCHAR(10), " +
+                        "total_delivery_charge DECIMAL, " +
+                        "PRIMARY KEY (month, day)" +
                         ")",
                 "CREATE TABLE IF NOT EXISTS pay_per_category(" +
                         "delivery_date DATE, " +
@@ -210,24 +212,31 @@ public class DataStreamJob {
         deliveryStream.map(
                         delivery -> {
                             LocalDate date = delivery.getDeliveryDate().toLocalDateTime().toLocalDate();
+                            int month = date.getMonthValue();
                             String day = date.getDayOfWeek().toString().toLowerCase();
                             BigDecimal totalDeliveryCharge = BigDecimal.valueOf(delivery.getDeliveryCharge());
 
-                            return new ChargePerDay(day, totalDeliveryCharge);
+                            return new ChargePerDay(month, day, totalDeliveryCharge);
                         }
-                ).keyBy(ChargePerDay::getDay)
+                ).keyBy(new KeySelector<ChargePerDay, Tuple2<Integer, String>>() {
+                    @Override
+                    public Tuple2<Integer, String> getKey(ChargePerDay chargePerDay) throws Exception {
+                        return Tuple2.of(chargePerDay.getMonth(), chargePerDay.getDay());
+                    }
+                })
                 .reduce((t1, chargePerDay) -> {
                     t1.setTotalDeliveryCharge(chargePerDay.getTotalDeliveryCharge().add(t1.getTotalDeliveryCharge()));
 
                     return t1;
                 }).addSink(JdbcSink.sink(
-                        "INSERT INTO charge_per_day (day, total_delivery_charge) " +
-                                "VALUES (?, ?) " +
-                                "ON CONFLICT (day) DO UPDATE SET " +
+                        "INSERT INTO charge_per_day (month, day, total_delivery_charge) " +
+                                "VALUES (?, ?, ?) " +
+                                "ON CONFLICT (month, day) DO UPDATE SET " +
                                 "total_delivery_charge = EXCLUDED.total_delivery_charge",
                         (JdbcStatementBuilder<ChargePerDay>) (preparedStatement, chargePerDay) -> {
-                            preparedStatement.setString(1, chargePerDay.getDay());
-                            preparedStatement.setBigDecimal(2, chargePerDay.getTotalDeliveryCharge());
+                            preparedStatement.setInt(1, chargePerDay.getMonth());
+                            preparedStatement.setString(2, chargePerDay.getDay());
+                            preparedStatement.setBigDecimal(3, chargePerDay.getTotalDeliveryCharge());
                         },
                         executionOptions,
                         connectionOptions
