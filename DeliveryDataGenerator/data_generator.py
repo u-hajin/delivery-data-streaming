@@ -44,7 +44,7 @@ def delivery_report(error, msg):
 if __name__ == '__main__':
     topic = 'delivery_information'
     producer = SerializingProducer({
-        'bootstrap.servers': 'localhost:9092'
+        'bootstrap.servers': 'localhost:9092,localhost:9093'
     })
 
     current_time = datetime.now()
