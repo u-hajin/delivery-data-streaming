@@ -9,7 +9,7 @@ import java.io.IOException;
 
 public class JsonValueDeserializationSchema implements DeserializationSchema<Delivery> {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public void open(InitializationContext context) throws Exception {
