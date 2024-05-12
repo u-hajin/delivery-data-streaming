@@ -177,3 +177,6 @@ target/
 
 pg_data
 elasticsearch
+
+*.ini
+*.properties

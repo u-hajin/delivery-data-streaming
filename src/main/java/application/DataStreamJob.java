@@ -40,36 +40,46 @@ import org.apache.flink.elasticsearch7.shaded.org.elasticsearch.common.xcontent.
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.time.LocalDate;
+import java.util.Properties;
 import java.util.StringTokenizer;
 
 import static utils.JsonUtil.convertDeliveryDataToJson;
 
 public class DataStreamJob {
-    private static final String JDBC_URL = "jdbc:postgresql://localhost:5432/postgres";
-    private static final String USER_NAME = "postgres";
-    private static final String PASSWORD = "postgres";
+    private static Properties getProperties() {
+        Properties prop = new Properties();
 
+        try (InputStream propsInput = DataStreamJob.class.getClassLoader().getResourceAsStream("config.properties")) {
+            prop.load(propsInput);
+            return prop;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return prop;
+    }
 
     public static void main(String[] args) throws Exception {
+        Properties prop = getProperties();
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.enableCheckpointing(30000);
 
-        String topic = "delivery_information";
-
         KafkaSource<Delivery> source = KafkaSource
                 .<Delivery>builder()
-                .setBootstrapServers("localhost:9092")
-                .setTopics(topic)
+                .setBootstrapServers(prop.getProperty("BOOTSTRAP_SERVERS"))
+                .setTopics(prop.getProperty("TOPIC"))
                 .setGroupId("flink-group")
                 .setStartingOffsets(OffsetsInitializer.earliest())
                 .setValueOnlyDeserializer(new JsonValueDeserializationSchema())
                 .build();
 
         DataStream<Delivery> deliveryStream = env.fromSource(source, WatermarkStrategy.noWatermarks(), "Kafka source");
-        deliveryStream.print();
+//        deliveryStream.print();
 
         JdbcExecutionOptions executionOptions = new JdbcExecutionOptions.Builder()
                 .withBatchSize(1000)
@@ -78,10 +88,10 @@ public class DataStreamJob {
                 .build();
 
         JdbcConnectionOptions connectionOptions = new JdbcConnectionOptions.JdbcConnectionOptionsBuilder()
-                .withUrl(JDBC_URL)
+                .withUrl(prop.getProperty("JDBC_URL"))
                 .withDriverName("org.postgresql.Driver")
-                .withUsername(USER_NAME)
-                .withPassword(PASSWORD)
+                .withUsername(prop.getProperty("USER_NAME"))
+                .withPassword(prop.getProperty("PASSWORD"))
                 .build();
 
         String[] createTableStatements = {
@@ -126,15 +136,15 @@ public class DataStreamJob {
                 "Create pay_per_category table"
         };
 
-        for (int i = 0; i < createTableStatements.length; i++) {
-            deliveryStream.addSink(JdbcSink.sink(
-                    createTableStatements[i],
-                    (JdbcStatementBuilder<Delivery>) (preparedStatement, delivery) -> {
-                    },
-                    executionOptions,
-                    connectionOptions
-            )).name(sinkName[i]);
-        }
+//        for (int i = 0; i < createTableStatements.length; i++) {
+//            deliveryStream.addSink(JdbcSink.sink(
+//                    createTableStatements[i],
+//                    (JdbcStatementBuilder<Delivery>) (preparedStatement, delivery) -> {
+//                    },
+//                    executionOptions,
+//                    connectionOptions
+//            )).name(sinkName[i]);
+//        }
 
 
         // insert into delivery_information table

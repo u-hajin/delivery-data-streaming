@@ -1,3 +1,4 @@
+import configparser
 import json
 import random
 import time
@@ -26,9 +27,9 @@ def generate_delivery_data():
     }
 
 
-def get_location(address):
+def get_location(address, apiKey):
     url = 'https://dapi.kakao.com/v2/local/search/address.json?query=' + address
-    headers = {'Authorization': 'KakaoAK <APIKEY>'}
+    headers = {'Authorization': apiKey}
     location = requests.get(url, headers=headers).json()
 
     return location
@@ -42,9 +43,12 @@ def delivery_report(error, msg):
 
 
 if __name__ == '__main__':
+    config = configparser.ConfigParser()
+    config.read('resources/config.ini')
+
     topic = 'delivery_information'
     producer = SerializingProducer({
-        'bootstrap.servers': 'localhost:9092,localhost:9093'
+        'bootstrap.servers': config['KAFKA']['BootstrapServer']
     })
 
     current_time = datetime.now()
@@ -52,7 +56,8 @@ if __name__ == '__main__':
     while (datetime.now() - current_time).seconds < 200:
         try:
             delivery = generate_delivery_data()
-            location = get_location(delivery['deliveryDestination'])['documents'][0]
+            kakaoApiKey = config['AUTHORIZATION']['KakaoApiKey']
+            location = get_location(delivery['deliveryDestination'], kakaoApiKey)['documents'][0]
 
             delivery['destinationLat'] = location['y']
             delivery['destinationLon'] = location['x']
@@ -67,6 +72,6 @@ if __name__ == '__main__':
 
             producer.poll(0)
 
-            time.sleep(2)
+            time.sleep(1)
         except Exception as e:
             print(e)
