@@ -42,18 +42,29 @@ def get_location(address, apiKey):
     return location
 
 
+def kafka_publish(producer, topic, data):
+    producer.produce(
+        topic=topic,
+        key=data['deliveryId'],
+        value=json.dumps(data, ensure_ascii=False),
+        on_delivery=delivery_report
+    )
+
+    producer.poll(0)
+
+
 def delivery_report(error, msg):
     if error is not None:
         print(f'Message delivery failed: {error}')
     else:
-        print(f'Message delivered to {msg.topic} [{msg.partition}]')
+        print(f'Message delivered to {msg.topic()} [{msg.partition()}]')
 
 
 if __name__ == '__main__':
     config = configparser.ConfigParser()
     config.read('resources/config.ini')
 
-    topic = 'delivery_information'
+    topic = config['KAFKA']['Topic']
     producer = SerializingProducer({
         'bootstrap.servers': config['KAFKA']['BootstrapServer']
     })
@@ -63,18 +74,10 @@ if __name__ == '__main__':
     while (datetime.now() - current_time).seconds < 500:
         try:
             data = generate_delivery_data()
-
-            producer.produce(
-                topic=topic,
-                key=data['deliveryId'],
-                value=json.dumps(data, ensure_ascii=False),
-                on_delivery=delivery_report
-            )
-
-            producer.poll(0)
-
-            print(data)
+            kafka_publish(producer, topic, data)
 
             time.sleep(1)
         except Exception as e:
             print(e)
+
+    producer.flush()
