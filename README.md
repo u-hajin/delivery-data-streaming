@@ -13,7 +13,7 @@ Kafka, flink를 사용해 실시간으로 발생하는 배달 주문 데이터�
 ### 환경 구축
 
 - Docker compose 사용해 컨테이너 구성
-- Zookeeper, Kafka broker, Control center, Postgres, Elasticsearch, Kibana 컨테이너 실행 및 관리
+- Zookeeper, Kafka broker, Control center, PostgreSQL, Elasticsearch, Kibana 컨테이너 실행 및 관리
 
 ### 데이터 수집
 
@@ -30,10 +30,11 @@ Kafka, flink를 사용해 실시간으로 발생하는 배달 주문 데이터�
 
 - 처리된 데이터들을 sink operation을 통해 Elasticsearch, postgreSQL DB에 저장
 - PostgreSQL delivery_information, pay_per_destination, pay_per_category, charge_per_day 테이블 생성
+- 데이터 변환 및 집계 연산 완료 데이터들을 위 테이블에 삽입
 
 ### 데이터 분석
 
-- Kibana 사용해 elasticsearch에 저장된 데이터 시각화
+- Kibana 사용해 elasticsearch에 저장된 데이터를 지도, 대시보드에 시각화
 
 ## 개발 환경
 
@@ -46,8 +47,12 @@ Kafka, flink를 사용해 실시간으로 발생하는 배달 주문 데이터�
 ## 실행 방법
 
 1. Kafka, Flink, PostgreSQL, Elasticsearch, Kibana 서비스 시작을 위해 `docker compose up`
-2. DeliveryDataGenerator 디렉토리의 data_generator.py 실행 (Kakao API key 발급 받아 코드에 삽입 필요)
-3. `run -c application.DataStreamJob target/DeliveryDataStreaming-1.0-SNAPSHOT.jar`를 통해 flink job 제출
+2. config 설정
+    - `DeliveryDataGenerator/resources/config.ini` kafka 브로커 설정, topic 이름, 카카오 API key 작성
+    - `src/main/resources/config.properties` kafka 브로커 설정, topic 이름, DB 설정 작성
+3. `mvn clean package` 명령어 실행
+4. `DeliveryDataGenerator/data_generator.py` 실행
+5. `run -c application.DataStreamJob target/DeliveryDataStreaming-1.0-SNAPSHOT.jar` 명령어로 flink job 실행
 
 ## 서비스 UI 접속
 
