@@ -18,6 +18,7 @@
 
 package application;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import deserialization.JsonValueDeserializationSchema;
 import dto.ChargePerDay;
 import dto.Delivery;
@@ -39,6 +40,9 @@ import org.apache.flink.elasticsearch7.shaded.org.elasticsearch.client.Requests;
 import org.apache.flink.elasticsearch7.shaded.org.elasticsearch.common.xcontent.XContentType;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.util.OutputTag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -63,6 +67,8 @@ public class DataStreamJob {
 
         return prop;
     }
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(DataStreamJob.class);
 
     public static void main(String[] args) throws Exception {
         Properties prop = getProperties();
@@ -193,7 +199,7 @@ public class DataStreamJob {
                         }
                 ).keyBy(new KeySelector<PayPerDestination, Tuple2<Date, String>>() {
                     @Override
-                    public Tuple2<Date, String> getKey(PayPerDestination payPerDestination) throws Exception {
+                    public Tuple2<Date, String> getKey(PayPerDestination payPerDestination) {
                         return Tuple2.of(payPerDestination.getDeliveryDate(), payPerDestination.getDeliveryDestination());
                     }
                 })
@@ -230,7 +236,7 @@ public class DataStreamJob {
                         }
                 ).keyBy(new KeySelector<ChargePerDay, Tuple2<Integer, String>>() {
                     @Override
-                    public Tuple2<Integer, String> getKey(ChargePerDay chargePerDay) throws Exception {
+                    public Tuple2<Integer, String> getKey(ChargePerDay chargePerDay) {
                         return Tuple2.of(chargePerDay.getMonth(), chargePerDay.getDay());
                     }
                 })
@@ -263,7 +269,7 @@ public class DataStreamJob {
                         }
                 ).keyBy(new KeySelector<PayPerCategory, Tuple2<Date, String>>() {
                     @Override
-                    public Tuple2<Date, String> getKey(PayPerCategory payPerCategory) throws Exception {
+                    public Tuple2<Date, String> getKey(PayPerCategory payPerCategory) {
                         return Tuple2.of(payPerCategory.getDeliveryDate(), payPerCategory.getFoodCategory());
                     }
                 })
@@ -285,19 +291,26 @@ public class DataStreamJob {
                         connectionOptions
                 )).name("Insert into pay_per_category");
 
+        Elasticsearch7SinkBuilder<Delivery> elasticsearchSinkBuilder = new Elasticsearch7SinkBuilder<>()
+                .setHosts(new HttpHost("localhost", 9200, "http"))
+                .setEmitter((delivery, context, indexer) -> {
+                    try {
+                        String json = convertDeliveryDataToJson(delivery);
+
+                        IndexRequest indexRequest = Requests.indexRequest()
+                                .index("delivery")
+                                .id(delivery.getDeliveryId())
+                                .create(true)
+                                .source(json, XContentType.JSON);
+                        indexer.add(indexRequest);
+                    } catch (JsonProcessingException e) {
+                        LOGGER.error("Failed converting Delivery Data to JSON: {}", e.getMessage());
+                    }
+                });
+
         // create elasticsearch sink
         deliveryStream.sinkTo(
-                new Elasticsearch7SinkBuilder<Delivery>()
-                        .setHosts(new HttpHost("localhost", 9200, "http"))
-                        .setEmitter((delivery, context, indexer) -> {
-                            String json = convertDeliveryDataToJson(delivery);
-
-                            IndexRequest indexRequest = Requests.indexRequest()
-                                    .index("delivery")
-                                    .id(delivery.getDeliveryId())
-                                    .source(json, XContentType.JSON);
-                            indexer.add(indexRequest);
-                        }).build()
+                elasticsearchSinkBuilder.build()
         ).name("Elasticsearch sink");
 
         // Execute program, beginning computation.

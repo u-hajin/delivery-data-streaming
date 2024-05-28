@@ -2,14 +2,13 @@ package utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dto.Delivery;
 
 public class JsonUtil {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    public static String convertDeliveryDataToJson(Delivery delivery) {
+    public static String convertDeliveryDataToJson(Delivery delivery) throws JsonProcessingException {
         try {
             ObjectNode rootNode = OBJECT_MAPPER.createObjectNode();
             rootNode.put("deliveryId", delivery.getDeliveryId());
@@ -31,7 +30,7 @@ public class JsonUtil {
             return OBJECT_MAPPER.writeValueAsString(rootNode);
         } catch (JsonProcessingException e) {
             e.printStackTrace();
-            return null;
+            throw e;
         }
     }
 }
