@@ -85,7 +85,6 @@ public class DataStreamJob {
                 .build();
 
         DataStream<Delivery> deliveryStream = env.fromSource(source, WatermarkStrategy.noWatermarks(), "Kafka source");
-//        deliveryStream.print();
 
         JdbcExecutionOptions executionOptions = new JdbcExecutionOptions.Builder()
                 .withBatchSize(1000)
@@ -142,15 +141,15 @@ public class DataStreamJob {
                 "Create pay_per_category table"
         };
 
-//        for (int i = 0; i < createTableStatements.length; i++) {
-//            deliveryStream.addSink(JdbcSink.sink(
-//                    createTableStatements[i],
-//                    (JdbcStatementBuilder<Delivery>) (preparedStatement, delivery) -> {
-//                    },
-//                    executionOptions,
-//                    connectionOptions
-//            )).name(sinkName[i]);
-//        }
+        for (int i = 0; i < createTableStatements.length; i++) {
+            deliveryStream.addSink(JdbcSink.sink(
+                    createTableStatements[i],
+                    (JdbcStatementBuilder<Delivery>) (preparedStatement, delivery) -> {
+                    },
+                    executionOptions,
+                    connectionOptions
+            )).name(sinkName[i]);
+        }
 
 
         // insert into delivery_information table
