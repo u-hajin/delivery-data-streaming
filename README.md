@@ -46,13 +46,14 @@ Kafka, flink를 사용해 실시간으로 발생하는 배달 주문 데이터�
 
 ## 실행 방법
 
-1. Kafka, Flink, PostgreSQL, Elasticsearch, Kibana 서비스 시작을 위해 `docker compose up`
-2. config 설정
+1. Kafka, PostgreSQL, Elasticsearch, Kibana 서비스 시작을 위해 `docker compose up`
+2. Flink 클러스터 실행 `bin/start-cluster.sh`
+3. config 설정
     - `DeliveryDataGenerator/resources/config.ini` kafka 브로커 설정, topic 이름, 카카오 API key 작성
     - `src/main/resources/config.properties` kafka 브로커 설정, topic 이름, DB 설정 작성
-3. `mvn clean package` 명령어 실행
-4. `DeliveryDataGenerator/data_generator.py` 실행
-5. `run -c application.DataStreamJob target/DeliveryDataStreaming-1.0-SNAPSHOT.jar` 명령어로 flink job 실행
+4. `mvn clean package` 명령어 실행
+5. `DeliveryDataGenerator/data_generator.py` 실행
+6. `flink-1.18.0/bin/flink run -c application.DataStreamJob target/DeliveryDataStreaming-1.0-SNAPSHOT.jar` 명령어로 flink job 실행
 
 ## 서비스 UI 접속
 
