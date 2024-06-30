@@ -151,6 +151,7 @@ services:
     depends_on:
       - broker1
       - broker2
+      - broker3
     ports:
       - "9021:9021"
     environment:
