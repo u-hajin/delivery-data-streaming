@@ -57,7 +57,7 @@ Kafka, flink를 사용해 실시간으로 발생하는 배달 주문 데이터�
 
 ## 서비스 UI 접속
 
-- Control Center: localhost:9092
+- Control Center: localhost:9091
 - Flink: localhost:8081
 - Kibana: localhost:5601
 
