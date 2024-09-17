@@ -40,12 +40,10 @@ import org.apache.flink.elasticsearch7.shaded.org.elasticsearch.client.Requests;
 import org.apache.flink.elasticsearch7.shaded.org.elasticsearch.common.xcontent.XContentType;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.util.OutputTag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import utils.PropertyUtil;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.time.LocalDate;
@@ -55,23 +53,10 @@ import java.util.StringTokenizer;
 import static utils.JsonUtil.convertDeliveryDataToJson;
 
 public class DataStreamJob {
-    private static Properties getProperties() {
-        Properties prop = new Properties();
-
-        try (InputStream propsInput = DataStreamJob.class.getClassLoader().getResourceAsStream("config.properties")) {
-            prop.load(propsInput);
-            return prop;
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        return prop;
-    }
-
     private static final Logger LOGGER = LoggerFactory.getLogger(DataStreamJob.class);
 
     public static void main(String[] args) throws Exception {
-        Properties prop = getProperties();
+        Properties prop = PropertyUtil.getProperties();
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.enableCheckpointing(30000);
 
