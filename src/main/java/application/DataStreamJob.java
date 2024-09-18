@@ -18,20 +18,15 @@
 
 package application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import deserialization.JsonValueDeserializationSchema;
 import dto.Delivery;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.connector.elasticsearch.sink.Elasticsearch7SinkBuilder;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
-import org.apache.flink.elasticsearch7.shaded.org.apache.http.HttpHost;
-import org.apache.flink.elasticsearch7.shaded.org.elasticsearch.action.index.IndexRequest;
-import org.apache.flink.elasticsearch7.shaded.org.elasticsearch.client.Requests;
-import org.apache.flink.elasticsearch7.shaded.org.elasticsearch.common.xcontent.XContentType;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import sinks.DatabaseSink;
+import sinks.ElasticsearchSink;
 import utils.PropertyUtil;
 
 import java.util.Properties;
@@ -61,27 +56,8 @@ public class DataStreamJob {
         DatabaseSink databaseSink = new DatabaseSink(prop);
         databaseSink.setupDatabaseSinks(deliveryStream);
 
-        Elasticsearch7SinkBuilder<Delivery> elasticsearchSinkBuilder = new Elasticsearch7SinkBuilder<>()
-                .setHosts(new HttpHost("localhost", 9200, "http"))
-                .setEmitter((delivery, context, indexer) -> {
-                    try {
-                        String json = convertDeliveryDataToJson(delivery);
-
-                        IndexRequest indexRequest = Requests.indexRequest()
-                                .index("delivery")
-                                .id(delivery.getDeliveryId())
-                                .create(true)
-                                .source(json, XContentType.JSON);
-                        indexer.add(indexRequest);
-                    } catch (JsonProcessingException e) {
-                        LOGGER.error("Failed converting Delivery Data to JSON: {}", e.getMessage());
-                    }
-                });
-
-        // create elasticsearch sink
-        deliveryStream.sinkTo(
-                elasticsearchSinkBuilder.build()
-        ).name("Elasticsearch sink");
+        ElasticsearchSink elasticsearchSink = new ElasticsearchSink();
+        elasticsearchSink.setupElasticsearchSink(deliveryStream);
 
         // Execute program, beginning computation.
         env.execute("Delivery Realtime Data Streaming");
